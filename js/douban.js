@@ -51,6 +51,8 @@ function saveUserTags() {
 let doubanMovieTvCurrentSwitch = 'movie';
 let doubanCurrentTag = '热门';
 let doubanPageStart = 0;
+let homeRecommendCategory = 'all';
+const cmsCategoryCache = new Map();
 const doubanPageSize = 16; // 一次显示的项目数量
 
 // 初始化豆瓣功能
@@ -321,6 +323,11 @@ function renderDoubanMovieTvSwitch() {
 function renderDoubanTags(tags) {
     const tagContainer = document.getElementById('douban-tags');
     if (!tagContainer) return;
+
+    if (HOME_RECOMMEND_CONFIG.mode === 'cms') {
+        renderHomeRecommendCategories();
+        return;
+    }
     
     // 确定当前应该使用的标签列表
     const currentTags = doubanMovieTvCurrentSwitch === 'movie' ? movieTags : tvTags;
@@ -391,7 +398,34 @@ function configureHomeRecommendUI() {
 
     if (title) title.textContent = isCmsMode ? '最新推荐' : '豆瓣热门';
     if (movieToggle?.parentElement) movieToggle.parentElement.classList.toggle('hidden', isCmsMode);
-    if (tags?.parentElement?.parentElement) tags.parentElement.parentElement.classList.toggle('hidden', isCmsMode);
+    if (tags?.parentElement?.parentElement) tags.parentElement.parentElement.classList.remove('hidden');
+}
+
+function renderHomeRecommendCategories() {
+    const tagContainer = document.getElementById('douban-tags');
+    if (!tagContainer) return;
+
+    const categories = Array.isArray(HOME_RECOMMEND_CONFIG.categories)
+        ? HOME_RECOMMEND_CONFIG.categories
+        : [{ id: 'all', label: '全部' }];
+
+    tagContainer.innerHTML = '';
+    categories.forEach(category => {
+        const button = document.createElement('button');
+        const isActive = category.id === homeRecommendCategory;
+        button.className = isActive
+            ? 'py-1.5 px-3.5 rounded text-sm font-medium transition-all duration-300 bg-pink-600 text-white border border-pink-500'
+            : 'py-1.5 px-3.5 rounded text-sm font-medium transition-all duration-300 bg-[#1a1a1a] text-gray-300 hover:bg-pink-700 hover:text-white border border-[#333] hover:border-white';
+        button.textContent = category.label;
+        button.addEventListener('click', () => {
+            if (homeRecommendCategory === category.id) return;
+            homeRecommendCategory = category.id;
+            doubanPageStart = 0;
+            renderHomeRecommendCategories();
+            renderRecommend(doubanCurrentTag, doubanPageSize, doubanPageStart);
+        });
+        tagContainer.appendChild(button);
+    });
 }
 
 function fetchDoubanTags() {
@@ -419,51 +453,108 @@ function fetchDoubanTags() {
         });
 }
 
-async function fetchCMSRecommendData(pageLimit, pageStart) {
+async function fetchCMSJson(source, params) {
+    const targetUrl = new URL(source.api);
+    Object.entries(params).forEach(([key, value]) => targetUrl.searchParams.set(key, String(value)));
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), HOME_RECOMMEND_CONFIG.timeout);
+
+    try {
+        const proxyTarget = PROXY_URL + encodeURIComponent(targetUrl.toString());
+        const proxiedUrl = window.ProxyAuth?.addAuthToProxyUrl
+            ? await window.ProxyAuth.addAuthToProxyUrl(proxyTarget)
+            : proxyTarget;
+        const response = await fetch(proxiedUrl, { signal: controller.signal });
+        if (!response.ok) throw new Error(`${source.name} HTTP ${response.status}`);
+        return await response.json();
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function fetchCMSCategoryIds(source, categoryId) {
+    const cacheKey = `${source.api}:${categoryId}`;
+    if (cmsCategoryCache.has(cacheKey)) return cmsCategoryCache.get(cacheKey);
+
+    try {
+        const data = await fetchCMSJson(source, { ac: 'list' });
+        const category = (HOME_RECOMMEND_CONFIG.categories || []).find(item => item.id === categoryId);
+        const childIds = Array.isArray(data.class)
+            ? data.class
+                .filter(item => {
+                    if (item.type_pid !== undefined && item.type_pid !== null) {
+                        return String(item.type_pid) === String(category?.typeId);
+                    }
+                    const typeName = String(item.type_name || '');
+                    if (categoryId === 'movie') return /电影|片$/.test(typeName);
+                    if (categoryId === 'tv') return /剧$|电视剧/.test(typeName);
+                    if (categoryId === 'variety') return /综艺/.test(typeName);
+                    if (categoryId === 'anime') return /动漫|动画/.test(typeName);
+                    return false;
+                })
+                .map(item => String(item.type_id))
+                .slice(0, 6)
+            : [];
+        const ids = childIds.length ? childIds : [category?.typeId];
+        cmsCategoryCache.set(cacheKey, ids);
+        return ids;
+    } catch (error) {
+        const ids = [(HOME_RECOMMEND_CONFIG.categories || []).find(item => item.id === categoryId)?.typeId];
+        cmsCategoryCache.set(cacheKey, ids);
+        return ids;
+    }
+}
+
+async function fetchCMSRecommendData(pageLimit, pageStart, categoryId = homeRecommendCategory) {
     const page = Math.floor(pageStart / pageLimit) + 1;
+    const category = (HOME_RECOMMEND_CONFIG.categories || []).find(item => item.id === categoryId);
     let lastError = new Error('CMS 推荐源没有返回内容');
 
     for (const sourceId of HOME_RECOMMEND_CONFIG.sources) {
         const source = API_SITES[sourceId];
         if (!source) continue;
 
-        const target = `${source.api}?ac=videolist&pg=${page}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), HOME_RECOMMEND_CONFIG.timeout);
+        const typeIds = category?.typeId
+            ? await fetchCMSCategoryIds(source, categoryId)
+            : [undefined];
+        const items = [];
 
-        try {
-            const proxyTarget = PROXY_URL + encodeURIComponent(target);
-            const proxiedUrl = window.ProxyAuth?.addAuthToProxyUrl
-                ? await window.ProxyAuth.addAuthToProxyUrl(proxyTarget)
-                : proxyTarget;
-            const response = await fetch(proxiedUrl, { signal: controller.signal });
-            if (!response.ok) throw new Error(`${source.name} HTTP ${response.status}`);
-
-            const data = await response.json();
-            if (!Array.isArray(data.list) || data.list.length === 0) {
-                throw new Error(`${source.name} 返回空列表`);
+        for (const typeId of typeIds) {
+            try {
+                const params = { ac: 'videolist', pg: page };
+                if (typeId) params.t = typeId;
+                const data = await fetchCMSJson(source, params);
+                if (Array.isArray(data.list)) items.push(...data.list);
+                if (items.length >= pageLimit) break;
+            } catch (error) {
+                lastError = error;
             }
-
-            return {
-                subjects: data.list.slice(0, pageLimit).map(item => {
-                    const score = item.vod_score && item.vod_score !== '0.0'
-                        ? item.vod_score
-                        : item.vod_remarks;
-                    return {
-                        title: String(item.vod_name || '未命名'),
-                        cover: item.vod_pic || '',
-                        rate: String(score || source.name),
-                        url: '',
-                        source_name: source.name
-                    };
-                })
-            };
-        } catch (error) {
-            lastError = error;
-            console.warn(`首页推荐源 ${sourceId} 请求失败:`, error);
-        } finally {
-            clearTimeout(timeoutId);
         }
+
+        const uniqueItems = items.filter((item, index, list) => {
+            const key = item.vod_id || item.vod_name;
+            return list.findIndex(candidate => (candidate.vod_id || candidate.vod_name) === key) === index;
+        });
+        if (uniqueItems.length === 0) {
+            lastError = new Error(`${source.name} 返回空列表`);
+            console.warn(`首页推荐源 ${sourceId} 请求失败:`, lastError);
+            continue;
+        }
+
+        return {
+            subjects: uniqueItems.slice(0, pageLimit).map(item => {
+                const score = item.vod_score && item.vod_score !== '0.0'
+                    ? item.vod_score
+                    : item.vod_remarks;
+                return {
+                    title: String(item.vod_name || '未命名'),
+                    cover: item.vod_pic || '',
+                    rate: String(score || source.name),
+                    url: '',
+                    source_name: source.name
+                };
+            })
+        };
     }
 
     throw lastError;

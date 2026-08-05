@@ -183,6 +183,13 @@ const API_SITES = {
 const HOME_RECOMMEND_CONFIG = {
     mode: 'cms',
     sources: ['ffzy', 'liangzi', 'suoni'],
+    categories: [
+        { id: 'all', label: '全部' },
+        { id: 'movie', label: '电影', typeId: '1' },
+        { id: 'tv', label: '电视剧', typeId: '2' },
+        { id: 'variety', label: '综艺', typeId: '3' },
+        { id: 'anime', label: '动漫', typeId: '4' }
+    ],
     timeout: 8000,
     fallbackToDouban: true
 };
