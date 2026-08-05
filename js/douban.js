@@ -482,10 +482,13 @@ async function fetchCMSCategoryIds(source, categoryId) {
         const childIds = Array.isArray(data.class)
             ? data.class
                 .filter(item => {
+                    const typeName = String(item.type_name || '');
+                    if (Array.isArray(category?.typeNames)) {
+                        return category.typeNames.some(name => typeName === name || typeName.includes(name));
+                    }
                     if (item.type_pid !== undefined && item.type_pid !== null) {
                         return String(item.type_pid) === String(category?.typeId);
                     }
-                    const typeName = String(item.type_name || '');
                     if (categoryId === 'movie') return /电影|片$/.test(typeName);
                     if (categoryId === 'tv') return /剧$|电视剧/.test(typeName);
                     if (categoryId === 'variety') return /综艺/.test(typeName);
@@ -495,11 +498,16 @@ async function fetchCMSCategoryIds(source, categoryId) {
                 .map(item => String(item.type_id))
                 .slice(0, 6)
             : [];
-        const ids = childIds.length ? childIds : [category?.typeId];
+        const ids = childIds.length
+            ? childIds
+            : category?.typeId
+                ? [category.typeId]
+                : [];
         cmsCategoryCache.set(cacheKey, ids);
         return ids;
     } catch (error) {
-        const ids = [(HOME_RECOMMEND_CONFIG.categories || []).find(item => item.id === categoryId)?.typeId];
+        const typeId = (HOME_RECOMMEND_CONFIG.categories || []).find(item => item.id === categoryId)?.typeId;
+        const ids = typeId ? [typeId] : [];
         cmsCategoryCache.set(cacheKey, ids);
         return ids;
     }
@@ -514,10 +522,15 @@ async function fetchCMSRecommendData(pageLimit, pageStart, categoryId = homeReco
         const source = API_SITES[sourceId];
         if (!source) continue;
 
-        const typeIds = category?.typeId
+        const typeIds = categoryId !== 'all'
             ? await fetchCMSCategoryIds(source, categoryId)
             : [undefined];
         const items = [];
+
+        if (typeIds.length === 0) {
+            lastError = new Error(`${source.name} 没有匹配的分类`);
+            continue;
+        }
 
         for (const typeId of typeIds) {
             try {
