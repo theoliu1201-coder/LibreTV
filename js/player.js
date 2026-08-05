@@ -223,7 +223,11 @@ async function initializePageContent() {
 
     // 初始化播放器
     if (videoUrl) {
-        initPlayer(await getPlayableVideoUrl(videoUrl));
+        if (isSharePlaybackUrl(videoUrl)) {
+            initSharePlayer(videoUrl);
+        } else {
+            initPlayer(await getPlayableVideoUrl(videoUrl));
+        }
     } else {
         showError('无效的视频链接');
     }
@@ -932,11 +936,12 @@ async function playEpisode(index) {
     currentUrl.searchParams.delete('position');
     window.history.replaceState({}, '', currentUrl.toString());
 
-    const playableUrl = await getPlayableVideoUrl(url);
-    if (isWebkit) {
-        initPlayer(playableUrl);
+    if (isSharePlaybackUrl(url)) {
+        initSharePlayer(url);
+    } else if (isWebkit) {
+        initPlayer(await getPlayableVideoUrl(url));
     } else {
-        art.switch = playableUrl;
+        art.switch = await getPlayableVideoUrl(url);
     }
 
     // 更新UI
@@ -974,6 +979,32 @@ async function getPlayableVideoUrl(url) {
         return await window.ProxyAuth.addAuthToProxyUrl(proxyTarget);
     }
     return proxyTarget;
+}
+
+function isSharePlaybackUrl(url) {
+    return /\/share\//i.test(url || '');
+}
+
+function initSharePlayer(url) {
+    if (currentHls?.destroy) currentHls.destroy();
+    if (art?.destroy) art.destroy(false);
+    currentHls = null;
+    art = null;
+
+    const playerContainer = document.getElementById('player');
+    if (!playerContainer) return;
+
+    playerContainer.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.src = url;
+    iframe.title = currentVideoTitle || '视频播放器';
+    iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+    iframe.allowFullscreen = true;
+    iframe.referrerPolicy = 'no-referrer';
+    iframe.className = 'w-full h-full min-h-[60vh] border-0 rounded-lg';
+    playerContainer.appendChild(iframe);
+    document.getElementById('player-loading').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
 }
 
 // 播放上一集

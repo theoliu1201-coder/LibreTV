@@ -237,7 +237,7 @@ async function resolveSharePlaybackUrl(url) {
         }
     }
 
-    return '';
+    return url;
 }
 
 // 处理自定义API的特殊详情页
