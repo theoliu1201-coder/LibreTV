@@ -158,13 +158,20 @@ async function handleApiRequest(url) {
                         }).filter(url => /^https?:\/\//i.test(url));
                         const sourceName = playSourceNames[index] || '';
                         const m3u8Count = urls.filter(url => /\.m3u8(?:$|\?)/i.test(url)).length;
-                        const score = m3u8Count * 100 + (/m3u8|hls/i.test(sourceName) ? 50 : 0);
+                        const shareCount = urls.filter(url => /\/share\//i.test(url)).length;
+                        const score = shareCount * 200 + m3u8Count * 100 + (/m3u8|hls/i.test(sourceName) ? 50 : 0);
                         return { urls, score };
                     }).filter(group => group.urls.length > 0);
 
                     sourceGroups.sort((first, second) => second.score - first.score);
-                    const playableGroup = sourceGroups.find(group => group.score > 0);
-                    episodes = playableGroup ? playableGroup.urls : [];
+                    for (const group of sourceGroups) {
+                        const resolvedUrls = (await Promise.all(group.urls.map(resolveSharePlaybackUrl)))
+                            .filter(url => url && /^https?:\/\//i.test(url));
+                        if (resolvedUrls.length > 0 && (group.score > 0 || resolvedUrls.some(url => /\.m3u8(?:$|\?)/i.test(url)))) {
+                            episodes = resolvedUrls;
+                            break;
+                        }
+                    }
                 }
                 
                 // 如果没有找到播放地址，尝试使用正则表达式查找m3u8链接
@@ -208,6 +215,29 @@ async function handleApiRequest(url) {
             episodes: [],
         });
     }
+}
+
+async function resolveSharePlaybackUrl(url) {
+    if (!/\/share\//i.test(url)) return url;
+
+    const targets = [url];
+    if (window.ProxyAuth?.addAuthToProxyUrl) {
+        targets.push(await window.ProxyAuth.addAuthToProxyUrl(PROXY_URL + encodeURIComponent(url)));
+    }
+
+    for (const target of targets) {
+        try {
+            const response = await fetch(target, { headers: { Accept: 'text/html, */*' } });
+            if (!response.ok) continue;
+            const html = await response.text();
+            const match = html.match(/(?:const|let|var)\s+url\s*=\s*["']([^"']+)["']/i);
+            if (match?.[1]) return new URL(match[1], url).toString();
+        } catch (error) {
+            console.warn('解析分享播放地址失败:', error);
+        }
+    }
+
+    return '';
 }
 
 // 处理自定义API的特殊详情页

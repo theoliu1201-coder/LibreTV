@@ -954,6 +954,21 @@ async function playEpisode(index) {
 async function getPlayableVideoUrl(url) {
     if (!url || !/^https?:\/\//i.test(url)) return url;
 
+    if (/\.m3u8(?:$|\?)/i.test(url)) {
+        try {
+            const directResponse = await fetch(url, {
+                headers: { Accept: 'application/vnd.apple.mpegurl, application/x-mpegURL, */*' },
+                cache: 'no-store'
+            });
+            if (directResponse.ok) {
+                await directResponse.text();
+                return url;
+            }
+        } catch (error) {
+            console.warn('直连播放清单失败，切换本站代理:', error);
+        }
+    }
+
     const proxyTarget = `${PROXY_URL}${encodeURIComponent(url)}`;
     if (window.ProxyAuth?.addAuthToProxyUrl) {
         return await window.ProxyAuth.addAuthToProxyUrl(proxyTarget);
