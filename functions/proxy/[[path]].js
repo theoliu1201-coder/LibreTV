@@ -243,7 +243,9 @@ export async function onRequest(context) {
     // 将目标 URL 重写为内部代理路径 (/proxy/...)
     function rewriteUrlToProxy(targetUrl) {
         // 确保目标URL被正确编码，以便作为路径的一部分
-        return `/proxy/${encodeURIComponent(targetUrl)}`;
+        const authHash = url.searchParams.get('auth');
+        const authQuery = authHash ? `?auth=${encodeURIComponent(authHash)}` : '';
+        return `/proxy/${encodeURIComponent(targetUrl)}${authQuery}`;
     }
 
     // 获取远程内容及其类型
@@ -269,11 +271,16 @@ export async function onRequest(context) {
                  throw new Error(`HTTP error ${response.status}: ${response.statusText}. URL: ${targetUrl}. Body: ${errorBody.substring(0, 150)}`);
             }
 
-            // 读取响应内容为文本
-            const content = await response.text();
             const contentType = response.headers.get('Content-Type') || '';
+            if (isMediaFile(targetUrl, contentType) && !contentType.toLowerCase().includes('mpegurl')) {
+                const binaryBody = await response.arrayBuffer();
+                logDebug(`请求成功: ${targetUrl}, Content-Type: ${contentType}, 二进制长度: ${binaryBody.byteLength}`);
+                return { binaryBody, contentType, responseHeaders: response.headers };
+            }
+
+            const content = await response.text();
             logDebug(`请求成功: ${targetUrl}, Content-Type: ${contentType}, 内容长度: ${content.length}`);
-            return { content, contentType, responseHeaders: response.headers }; // 同时返回原始响应头
+            return { content, contentType, responseHeaders: response.headers };
 
         } catch (error) {
              logDebug(`请求彻底失败: ${targetUrl}: ${error.message}`);
@@ -429,7 +436,7 @@ export async function onRequest(context) {
 
         // --- 获取并处理选中的子 M3U8 ---
 
-        const cacheKey = `m3u8_processed:${bestVariantUrl}`; // 使用处理后的缓存键
+        const cacheKey = `m3u8_processed:v2:${bestVariantUrl}`; // 使用处理后的缓存键
 
         let kvNamespace = null;
         try {
@@ -500,7 +507,7 @@ export async function onRequest(context) {
         logDebug(`收到代理请求: ${targetUrl}`);
 
         // --- 缓存检查 (KV) ---
-        const cacheKey = `proxy_raw:${targetUrl}`; // 使用原始内容的缓存键
+        const cacheKey = `proxy_raw:v2:${targetUrl}`; // 使用原始内容的缓存键
         let kvNamespace = null;
         try {
             kvNamespace = env.LIBRETV_PROXY_KV;
@@ -539,7 +546,15 @@ export async function onRequest(context) {
         }
 
         // --- 实际请求 ---
-        const { content, contentType, responseHeaders } = await fetchContentWithType(targetUrl);
+        const { content, binaryBody, contentType, responseHeaders } = await fetchContentWithType(targetUrl);
+
+        if (binaryBody) {
+            const binaryHeaders = new Headers(responseHeaders);
+            binaryHeaders.set('Cache-Control', `public, max-age=${CACHE_TTL}`);
+            binaryHeaders.delete('content-encoding');
+            binaryHeaders.delete('content-length');
+            return createResponse(binaryBody, 200, binaryHeaders);
+        }
 
         // --- 写入缓存 (KV) ---
         if (kvNamespace) {

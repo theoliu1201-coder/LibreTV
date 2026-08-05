@@ -114,7 +114,7 @@ document.addEventListener('passwordVerified', () => {
 });
 
 // 初始化页面内容
-function initializePageContent() {
+async function initializePageContent() {
 
     // 解析URL参数
     const urlParams = new URLSearchParams(window.location.search);
@@ -223,7 +223,7 @@ function initializePageContent() {
 
     // 初始化播放器
     if (videoUrl) {
-        initPlayer(videoUrl);
+        initPlayer(await getPlayableVideoUrl(videoUrl));
     } else {
         showError('无效的视频链接');
     }
@@ -885,7 +885,7 @@ function renderEpisodes() {
 }
 
 // 播放指定集数
-function playEpisode(index) {
+async function playEpisode(index) {
     // 确保index在有效范围内
     if (index < 0 || index >= currentEpisodes.length) {
         return;
@@ -932,10 +932,11 @@ function playEpisode(index) {
     currentUrl.searchParams.delete('position');
     window.history.replaceState({}, '', currentUrl.toString());
 
+    const playableUrl = await getPlayableVideoUrl(url);
     if (isWebkit) {
-        initPlayer(url);
+        initPlayer(playableUrl);
     } else {
-        art.switch = url;
+        art.switch = playableUrl;
     }
 
     // 更新UI
@@ -948,6 +949,16 @@ function playEpisode(index) {
 
     // 三秒后保存到历史记录
     setTimeout(() => saveToHistory(), 3000);
+}
+
+async function getPlayableVideoUrl(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return url;
+
+    const proxyTarget = `${PROXY_URL}${encodeURIComponent(url)}`;
+    if (window.ProxyAuth?.addAuthToProxyUrl) {
+        return await window.ProxyAuth.addAuthToProxyUrl(proxyTarget);
+    }
+    return proxyTarget;
 }
 
 // 播放上一集
