@@ -226,14 +226,21 @@ async function resolveSharePlaybackUrl(url) {
     }
 
     for (const target of targets) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
         try {
-            const response = await fetch(target, { headers: { Accept: 'text/html, */*' } });
+            const response = await fetch(target, {
+                headers: { Accept: 'text/html, */*' },
+                signal: controller.signal
+            });
             if (!response.ok) continue;
             const html = await response.text();
             const match = html.match(/(?:const|let|var)\s+url\s*=\s*["']([^"']+)["']/i);
             if (match?.[1]) return new URL(match[1], url).toString();
         } catch (error) {
             console.warn('解析分享播放地址失败:', error);
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
