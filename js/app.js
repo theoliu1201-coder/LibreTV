@@ -1,5 +1,7 @@
 // 全局变量
-let selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || '["tyyszy","dyttzy", "bfzy", "ruyi"]'); // 默认选中资源
+const DEFAULT_SELECTED_APIS = ['ffzy', 'liangzi', 'suoni', 'baofeng', 'kuaifan'];
+const API_SELECTION_VERSION = '2026-08-05-1';
+let selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || JSON.stringify(DEFAULT_SELECTED_APIS)); // 默认选中资源
 let customAPIs = JSON.parse(localStorage.getItem('customAPIs') || '[]'); // 存储自定义API列表
 
 // 添加当前播放的集数索引
@@ -13,6 +15,12 @@ let episodesReversed = false;
 
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function () {
+    if (localStorage.getItem('apiSelectionVersion') !== API_SELECTION_VERSION) {
+        selectedAPIs = [...DEFAULT_SELECTED_APIS];
+        localStorage.setItem('selectedAPIs', JSON.stringify(selectedAPIs));
+        localStorage.setItem('apiSelectionVersion', API_SELECTION_VERSION);
+    }
+
     // 初始化API复选框
     initAPICheckboxes();
 
@@ -27,10 +35,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 设置默认API选择（如果是第一次加载）
     if (!localStorage.getItem('hasInitializedDefaults')) {
-        // 默认选中资源
-        selectedAPIs = ["tyyszy", "bfzy", "dyttzy", "ruyi"];
-        localStorage.setItem('selectedAPIs', JSON.stringify(selectedAPIs));
-
         // 默认选中过滤开关
         localStorage.setItem('yellowFilterEnabled', 'true');
         localStorage.setItem(PLAYER_CONFIG.adFilteringStorage, 'true');
@@ -1303,7 +1307,8 @@ async function exportConfig() {
         'yellowFilterEnabled',
         'adFilteringEnabled',
         'doubanEnabled',
-        'hasInitializedDefaults'
+        'hasInitializedDefaults',
+        'apiSelectionVersion'
     ];
 
     // 导出设置项

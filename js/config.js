@@ -22,12 +22,169 @@ const SITE_CONFIG = {
 
 // API站点配置
 const API_SITES = {
-    testSource: {
-        api: 'https://www.example.com/api.php/provide/vod',
-        name: '空内容测试源',
-        adult: true
-    }
-    //ARCHIVE https://telegra.ph/APIs-08-12
+  "ffzy": {
+    "api": "https://cj.ffzyapi.com/api.php/provide/vod",
+    "name": "非凡资源",
+    "adult": false
+  },
+  "liangzi": {
+    "api": "https://cj.lziapi.com/api.php/provide/vod",
+    "name": "量子资源",
+    "adult": false
+  },
+  "suoni": {
+    "api": "https://suoniapi.com/api.php/provide/vod",
+    "name": "索尼资源",
+    "adult": false
+  },
+  "yinghua": {
+    "api": "https://m3u8.apiyhzy.com/api.php/provide/vod",
+    "name": "樱花资源",
+    "adult": false
+  },
+  "heimuer": {
+    "api": "https://json.heimuer.tv/api.php/provide/vod",
+    "name": "黑木耳资源",
+    "adult": true
+  },
+  "baofeng": {
+    "api": "https://bfzyapi.com/api.php/provide/vod",
+    "name": "暴风资源",
+    "adult": false
+  },
+  "wujin": {
+    "api": "https://api.wujinapi.com/api.php/provide/vod",
+    "name": "无尽资源",
+    "adult": false
+  },
+  "apibd": {
+    "api": "https://api.apibdzy.com/api.php/provide/vod",
+    "name": "百度资源",
+    "adult": false
+  },
+  "kuaifan": {
+    "api": "https://api.kuaifan.tv/api.php/provide/vod",
+    "name": "快番资源",
+    "adult": false
+  },
+  "leshi": {
+    "api": "https://leshiapi.com/api.php/provide/vod",
+    "name": "乐视资源",
+    "adult": false
+  },
+  "guangsu": {
+    "api": "https://api.guangsuapi.com/api.php/provide/vod",
+    "name": "光速资源",
+    "adult": false
+  },
+  "tiankong": {
+    "api": "https://api.tiankongapi.com/api.php/provide/vod",
+    "name": "天空资源",
+    "adult": false
+  },
+  "fox": {
+    "api": "https://api.foxzyapi.com/api.php/provide/vod",
+    "name": "狐狸资源",
+    "adult": false
+  },
+  "shuangyu": {
+    "api": "https://api.sszyapi.com/api.php/provide/vod",
+    "name": "双鱼资源",
+    "adult": false
+  },
+  "yikan": {
+    "api": "https://api.yikanapi.com/api.php/provide/vod",
+    "name": "易看资源",
+    "adult": false
+  },
+  "zuid": {
+    "api": "https://api.zuidapi.com/api.php/provide/vod",
+    "name": "最大资源",
+    "adult": false
+  },
+  "ikun": {
+    "api": "https://ikunzyapi.com/api.php/provide/vod",
+    "name": "爱坤资源",
+    "adult": false
+  },
+  "hongniu": {
+    "api": "https://www.hongniuzy2.com/api.php/provide/vod",
+    "name": "红牛资源",
+    "adult": false
+  },
+  "kuaibo": {
+    "api": "https://www.kuaibozy.com/api.php/provide/vod",
+    "name": "快播资源",
+    "adult": false
+  },
+  "kudian": {
+    "api": "https://kudianzy.com/api.php/provide/vod",
+    "name": "酷点资源",
+    "adult": false
+  },
+  "haiwaikan": {
+    "api": "https://haiwaikan.com/api.php/provide/vod",
+    "name": "海外看资源",
+    "adult": false
+  },
+  "lehootv": {
+    "api": "https://lehootv.com/api.php/provide/vod",
+    "name": "乐活资源",
+    "adult": false
+  },
+  "sanliuling": {
+    "api": "https://360zy.com/api.php/provide/vod",
+    "name": "360资源",
+    "adult": false
+  },
+  "wolong": {
+    "api": "https://collect.wolongzyw.com/api.php/provide/vod",
+    "name": "卧龙资源",
+    "adult": false
+  },
+  "qidian": {
+    "api": "https://a.7dyu.cn/api.php/provide/vod",
+    "name": "七电影资源",
+    "adult": false
+  },
+  "lovedan": {
+    "api": "https://lovedan.net/api.php/provide/vod",
+    "name": "流浪资源",
+    "adult": false
+  },
+  "wowo": {
+    "api": "https://api.wwzy.tv/api.php/provide/vod",
+    "name": "旺旺资源",
+    "adult": false
+  },
+  "heihei": {
+    "api": "https://hhzyapi.com/api.php/provide/vod",
+    "name": "哈哈资源",
+    "adult": false
+  },
+  "modu": {
+    "api": "https://caiji.moduapi.cc/api.php/provide/vod",
+    "name": "魔都资源",
+    "adult": false
+  },
+  "uku": {
+    "api": "https://api.ukuapi.com/api.php/provide/vod",
+    "name": "U酷资源",
+    "adult": false
+  },
+  "niuniu": {
+    "api": "https://api.niuniuzy.me/api.php/provide/vod",
+    "name": "牛牛资源",
+    "adult": false
+  }
+}
+;
+
+const HOME_RECOMMEND_CONFIG = {
+    mode: 'cms',
+    sources: ['ffzy', 'liangzi', 'suoni'],
+    timeout: 8000,
+    fallbackToDouban: true
 };
 
 // 定义合并方法
@@ -44,7 +201,7 @@ window.extendAPISites = extendAPISites;
 const AGGREGATED_SEARCH_CONFIG = {
     enabled: true,             // 是否启用聚合搜索
     timeout: 8000,            // 单个源超时时间（毫秒）
-    maxResults: 10000,          // 最大结果数量
+    maxResults: 1000,          // 最大结果数量
     parallelRequests: true,   // 是否并行请求所有源
     showSourceBadges: true    // 是否显示来源徽章
 };
@@ -55,7 +212,8 @@ const API_CONFIG = {
         // 只拼接参数部分，不再包含 /api.php/provide/vod/
         path: '?ac=videolist&wd=',
         pagePath: '?ac=videolist&wd={query}&pg={page}',
-        maxPages: 50, // 最大获取页数
+        maxPages: 1, // 最大获取页数
+        timeout: 8000,
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': 'application/json'

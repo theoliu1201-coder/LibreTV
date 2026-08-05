@@ -156,11 +156,11 @@
                     </div>
                 </div>
                 
-                <!-- 豆瓣热门开关 -->
+                <!-- 首页推荐开关 -->
                 <div class="flex items-center justify-between">
                     <div>
-                        <label class="text-sm font-medium text-gray-400">豆瓣热门推荐</label>
-                        <p class="text-xs text-gray-500 mt-1">首页显示豆瓣热门影视内容</p>
+                        <label class="text-sm font-medium text-gray-400">首页推荐</label>
+                        <p class="text-xs text-gray-500 mt-1">首页显示 CMS 或豆瓣推荐内容</p>
                     </div>
                     <div class="relative inline-block w-12 align-middle select-none">
                         <input type="checkbox" id="doubanToggle" class="opacity-0 absolute w-full h-full cursor-pointer z-10">
@@ -238,7 +238,7 @@
                 </div>
             </div>
             
-            <!-- 豆瓣热门推荐区域: 默认隐藏，现在位于搜索区域下方，调整宽度 -->
+            <!-- 首页推荐区域 -->
             <div id="doubanArea" class="w-full my-8 hidden">
                 <div class="mx-auto max-w-screen-xl px-2">
                     <!-- 改进标题和标签区域布局 -->
@@ -246,7 +246,7 @@
                         <!-- 标题和刷新按钮一行 -->
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center">
-                                <h2 class="text-xl font-bold text-white mr-4">豆瓣热门</h2>
+                                <h2 id="home-recommend-title" class="text-xl font-bold text-white mr-4">首页推荐</h2>
                                 <!-- 添加电影/电视剧切换开关 -->
                                 <div class="flex items-center bg-[#222] rounded-full p-1">
                                     <button id="douban-movie-toggle" class="px-3 py-1 text-sm rounded-full bg-pink-600 text-white">电影</button>

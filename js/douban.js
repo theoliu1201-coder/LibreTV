@@ -55,6 +55,8 @@ const doubanPageSize = 16; // 一次显示的项目数量
 
 // 初始化豆瓣功能
 function initDouban() {
+    configureHomeRecommendUI();
+
     // 设置豆瓣开关的初始状态
     const doubanToggle = document.getElementById('doubanToggle');
     if (doubanToggle) {
@@ -381,6 +383,17 @@ function setupDoubanRefreshBtn() {
     };
 }
 
+function configureHomeRecommendUI() {
+    const isCmsMode = HOME_RECOMMEND_CONFIG.mode === 'cms';
+    const title = document.getElementById('home-recommend-title');
+    const movieToggle = document.getElementById('douban-movie-toggle');
+    const tags = document.getElementById('douban-tags');
+
+    if (title) title.textContent = isCmsMode ? '最新推荐' : '豆瓣热门';
+    if (movieToggle?.parentElement) movieToggle.parentElement.classList.toggle('hidden', isCmsMode);
+    if (tags?.parentElement?.parentElement) tags.parentElement.parentElement.classList.toggle('hidden', isCmsMode);
+}
+
 function fetchDoubanTags() {
     const movieTagsTarget = `https://movie.douban.com/j/search_tags?type=movie`
     fetchDoubanData(movieTagsTarget)
@@ -406,8 +419,58 @@ function fetchDoubanTags() {
         });
 }
 
+async function fetchCMSRecommendData(pageLimit, pageStart) {
+    const page = Math.floor(pageStart / pageLimit) + 1;
+    let lastError = new Error('CMS 推荐源没有返回内容');
+
+    for (const sourceId of HOME_RECOMMEND_CONFIG.sources) {
+        const source = API_SITES[sourceId];
+        if (!source) continue;
+
+        const target = `${source.api}?ac=videolist&pg=${page}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), HOME_RECOMMEND_CONFIG.timeout);
+
+        try {
+            const proxyTarget = PROXY_URL + encodeURIComponent(target);
+            const proxiedUrl = window.ProxyAuth?.addAuthToProxyUrl
+                ? await window.ProxyAuth.addAuthToProxyUrl(proxyTarget)
+                : proxyTarget;
+            const response = await fetch(proxiedUrl, { signal: controller.signal });
+            if (!response.ok) throw new Error(`${source.name} HTTP ${response.status}`);
+
+            const data = await response.json();
+            if (!Array.isArray(data.list) || data.list.length === 0) {
+                throw new Error(`${source.name} 返回空列表`);
+            }
+
+            return {
+                subjects: data.list.slice(0, pageLimit).map(item => {
+                    const score = item.vod_score && item.vod_score !== '0.0'
+                        ? item.vod_score
+                        : item.vod_remarks;
+                    return {
+                        title: String(item.vod_name || '未命名'),
+                        cover: item.vod_pic || '',
+                        rate: String(score || source.name),
+                        url: '',
+                        source_name: source.name
+                    };
+                })
+            };
+        } catch (error) {
+            lastError = error;
+            console.warn(`首页推荐源 ${sourceId} 请求失败:`, error);
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    throw lastError;
+}
+
 // 渲染热门推荐内容
-function renderRecommend(tag, pageLimit, pageStart) {
+async function renderRecommend(tag, pageLimit, pageStart) {
     const container = document.getElementById("douban-results");
     if (!container) return;
 
@@ -424,21 +487,29 @@ function renderRecommend(tag, pageLimit, pageStart) {
     container.insertAdjacentHTML('beforeend', loadingOverlayHTML);
     
     const target = `https://movie.douban.com/j/search_subjects?type=${doubanMovieTvCurrentSwitch}&tag=${tag}&sort=recommend&page_limit=${pageLimit}&page_start=${pageStart}`;
-    
-    // 使用通用请求函数
-    fetchDoubanData(target)
-        .then(data => {
-            renderDoubanCards(data, container);
-        })
-        .catch(error => {
-            console.error("获取豆瓣数据失败：", error);
-            container.innerHTML = `
-                <div class="col-span-full text-center py-8">
-                    <div class="text-red-400">❌ 获取豆瓣数据失败，请稍后重试</div>
-                    <div class="text-gray-500 text-sm mt-2">提示：使用VPN可能有助于解决此问题</div>
-                </div>
-            `;
-        });
+
+    try {
+        let data;
+        if (HOME_RECOMMEND_CONFIG.mode === 'cms') {
+            try {
+                data = await fetchCMSRecommendData(pageLimit, pageStart);
+            } catch (cmsError) {
+                if (!HOME_RECOMMEND_CONFIG.fallbackToDouban) throw cmsError;
+                console.warn('CMS 首页推荐失败，切换到豆瓣:', cmsError);
+                data = await fetchDoubanData(target);
+            }
+        } else {
+            data = await fetchDoubanData(target);
+        }
+        renderDoubanCards(data, container);
+    } catch (error) {
+        console.error("获取首页推荐失败：", error);
+        container.innerHTML = `
+            <div class="col-span-full text-center py-8">
+                <div class="text-red-400">❌ 获取首页推荐失败，请稍后重试</div>
+            </div>
+        `;
+    }
 }
 
 async function fetchDoubanData(url) {
@@ -534,22 +605,20 @@ function renderDoubanCards(data, container) {
             
             // 2. 也准备代理URL作为备选
             const proxiedCoverUrl = PROXY_URL + encodeURIComponent(originalCoverUrl);
+            const placeholderCoverUrl = 'https://via.placeholder.com/300x450?text=无封面';
             
             // 为不同设备优化卡片布局
             card.innerHTML = `
                 <div class="relative w-full aspect-[2/3] overflow-hidden cursor-pointer" onclick="fillAndSearchWithDouban('${safeTitle}')">
                     <img src="${originalCoverUrl}" alt="${safeTitle}" 
                         class="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                        onerror="this.onerror=null; this.src='${proxiedCoverUrl}'; this.classList.add('object-contain');"
                         loading="lazy" referrerpolicy="no-referrer">
                     <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60"></div>
                     <div class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm">
                         <span class="text-yellow-400">★</span> ${safeRate}
                     </div>
                     <div class="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm hover:bg-[#333] transition-colors">
-                        <a href="${item.url}" target="_blank" rel="noopener noreferrer" title="在豆瓣查看" onclick="event.stopPropagation();">
-                            🔗
-                        </a>
+                        ${item.url ? `<a href="${item.url}" target="_blank" rel="noopener noreferrer" title="打开来源" onclick="event.stopPropagation();">🔗</a>` : ''}
                     </div>
                 </div>
                 <div class="p-2 text-center bg-[#111]">
@@ -560,6 +629,26 @@ function renderDoubanCards(data, container) {
                     </button>
                 </div>
             `;
+
+            const coverImage = card.querySelector('img');
+            if (coverImage) {
+                const handleCoverError = async () => {
+                    coverImage.removeEventListener('error', handleCoverError);
+                    coverImage.classList.add('object-contain');
+                    try {
+                        const authenticatedProxyUrl = window.ProxyAuth?.addAuthToProxyUrl
+                            ? await window.ProxyAuth.addAuthToProxyUrl(proxiedCoverUrl)
+                            : proxiedCoverUrl;
+                        coverImage.addEventListener('error', () => {
+                            coverImage.src = placeholderCoverUrl;
+                        }, { once: true });
+                        coverImage.src = authenticatedProxyUrl;
+                    } catch {
+                        coverImage.src = placeholderCoverUrl;
+                    }
+                };
+                coverImage.addEventListener('error', handleCoverError);
+            }
             
             fragment.appendChild(card);
         });
