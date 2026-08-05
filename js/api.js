@@ -149,21 +149,22 @@ async function handleApiRequest(url) {
                 let episodes = [];
                 
                 if (videoDetail.vod_play_url) {
-                    // 分割不同播放源
+                    const playSourceNames = String(videoDetail.vod_play_from || '').split('$$$');
                     const playSources = videoDetail.vod_play_url.split('$$$');
-                    
-                    // 提取第一个播放源的集数（通常为主要源）
-                    if (playSources.length > 0) {
-                        const mainSource = playSources[0];
-                        const episodeList = mainSource.split('#');
-                        
-                        // 从每个集数中提取URL
-                        episodes = episodeList.map(ep => {
-                            const parts = ep.split('$');
-                            // 返回URL部分(通常是第二部分，如果有的话)
+                    const sourceGroups = playSources.map((source, index) => {
+                        const urls = source.split('#').map(episode => {
+                            const parts = episode.split('$');
                             return parts.length > 1 ? parts[1] : '';
-                        }).filter(url => url && (url.startsWith('http://') || url.startsWith('https://')));
-                    }
+                        }).filter(url => /^https?:\/\//i.test(url));
+                        const sourceName = playSourceNames[index] || '';
+                        const m3u8Count = urls.filter(url => /\.m3u8(?:$|\?)/i.test(url)).length;
+                        const score = m3u8Count * 100 + (/m3u8|hls/i.test(sourceName) ? 50 : 0);
+                        return { urls, score };
+                    }).filter(group => group.urls.length > 0);
+
+                    sourceGroups.sort((first, second) => second.score - first.score);
+                    const playableGroup = sourceGroups.find(group => group.score > 0);
+                    episodes = playableGroup ? playableGroup.urls : [];
                 }
                 
                 // 如果没有找到播放地址，尝试使用正则表达式查找m3u8链接
